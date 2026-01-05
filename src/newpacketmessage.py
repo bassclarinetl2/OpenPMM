@@ -24,6 +24,14 @@ class NewPacketMessage(QMainWindow,Ui_NewPacketMessageClass):
         subject = self.pd.make_standard_subject()
         self.cSubject.setText(subject)
 
+    def prepopulate(self,mbh:MailBoxHeader,m:str):
+        self.cBBS.setText(mbh.bbs)
+        self.cFrom.setText(mbh.from_addr)
+        self.cTo.setText(mbh.to_addr)
+        self.cSubject.setText(mbh.subject)
+        self.cMessage.setPlainText(m)
+        self.cUrgent.setChecked(mbh.flags & MailFlags.IS_URGENT.value)
+
     def resizeEvent(self,event):
         self.cMessage.resize(event.size().width()-20,event.size().height()-50)
         return super().resizeEvent(event)

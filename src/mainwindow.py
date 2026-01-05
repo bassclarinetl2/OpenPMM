@@ -198,9 +198,11 @@ class MainWindow(QMainWindow,Ui_MainWindowClass):
         self.menuCopy_to_Folder.addAction(f[2]).triggered.connect(lambda: self.on_copy_to_folder(MailFlags.FOLDER_3))
         self.menuCopy_to_Folder.addAction(f[3]).triggered.connect(lambda: self.on_copy_to_folder(MailFlags.FOLDER_4))
         self.menuCopy_to_Folder.addAction(f[4]).triggered.connect(lambda: self.on_copy_to_folder(MailFlags.FOLDER_5))
-        global_signals.signal_new_outgoing_text_message.connect(self.on_handle_new_outgoing_message)
-        global_signals.signal_new_outgoing_form_message.connect(self.on_handle_new_outgoing_form_message)
-        global_signals.signal_new_outgoing_receipt.connect(self.on_handle_new_outgoing_receipt)
+        global_signals.signal_new_outgoing_text_message.connect(self.handle_new_outgoing_message)
+        global_signals.signal_new_outgoing_form_message.connect(self.handle_new_outgoing_form_message)
+        global_signals.signal_new_outgoing_receipt.connect(self.handle_new_outgoing_receipt)
+        global_signals.signal_resend_text_messasge.connect(self.handle_resend_text_message)
+
 
     def closeEvent(self, event):
         if self.mailbox.needs_cleaning():
@@ -383,7 +385,7 @@ class MainWindow(QMainWindow,Ui_MainWindowClass):
         tmp.show()
         tmp.raise_()
 
-    def on_handle_new_outgoing_message(self,mbh,m):
+    def handle_new_outgoing_message(self,mbh,m):
         # log activity
         mbh.flags |= MailFlags.IS_OUTGOING.value
         self.mailbox.add_mail(mbh,m,MailFlags.FOLDER_OUT_TRAY)
@@ -396,14 +398,14 @@ class MainWindow(QMainWindow,Ui_MainWindowClass):
             pass
         self.update_mail_list()
 
-    def on_handle_new_outgoing_form_message(self,subject,m,urgent,previous_to_addr):
+    def handle_new_outgoing_form_message(self,subject,m,urgent,previous_to_addr):
         tmp = newpacketmessage.NewPacketMessage(self.settings,self)
         tmp.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
-        tmp.setInitialData(subject,m,urgent,previous_to_addr)
+        tmp.setInitialData(subject,m,urgent,previous_to_addr) # sort of a duplicate of prepopulate, fix this up later
         tmp.show()
         tmp.raise_()
 
-    def on_handle_new_outgoing_receipt(self,mbh):
+    def handle_new_outgoing_receipt(self,mbh):
         # log only
         try:
             with open("activity.log","ab") as file:
@@ -411,6 +413,15 @@ class MainWindow(QMainWindow,Ui_MainWindowClass):
                 file.write(s.encode("windows-1252","replace"))
         except FileNotFoundError:
             pass
+
+    def handle_resend_text_message(self,mbh,m):
+        tmp = newpacketmessage.NewPacketMessage(self.settings,self)
+        tmp.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        tmp.prepopulate(mbh,m)
+        tmp.show()
+        tmp.raise_()
+
+        
 
     def on_read_message(self,row,_):
         if row < 0 or row >= len(self.mailIndex): return

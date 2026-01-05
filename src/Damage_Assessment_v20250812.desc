@@ -32,12 +32,12 @@ MsgNo,str,,P1,289,80,108,22
 24.,rb,Y,P1,187,365,416,39,Single Family,196,366,0,0,Mobile Home,337,366,0,0,Non-Profit Orgs,478,366,0,0,Multi-Family,196,386,0,0,Business,337,386,0,0,Outbuilding,478,386,0,0
 25.,nstr,Y,P1,170,409,566,17
 26.,rb,,P1,189,431,255,19,Own,196,432,0,0,Rent,385,432,0,0
-// these must come before the items they control, the id serves only as a clue about what items it is controlling
-27.,rg,Y,P1,194,454,426,39,27a.,27b.,27c.,27d.
-27a.,cb,,P1,198,456,0,0
-27b.,cb,,P1,198,476,0,0
-27c.,cb,,P1,433,456,0,0
-27d.,cb,,P1,433,476,0,0
+// these must come before the items they control
+27.,anyg,Y,P1,194,454,426,39
+27a.,cb,27.,P1,198,456,0,0
+27b.,cb,27.,P1,198,476,0,0
+27c.,cb,27.,P1,433,456,0,0
+27d.,cb,27.,P1,433,476,0,0
 28.,rb,Y,P1,187,495,388,40,Basement,196,495,0,0,Crawlspace,196,515,0,0,Basement and Crawlspace,384,497,0,0,N/A,384,517,0,0
 29.,rb,Y,P1,137,555,486,39,Destroyed,149,557,0,0,Major,149,577,0,0,Minor,291,557,0,0,Affected,291,577,0,0,No Visible Damage,479,557,0,0
 30.,rb,,P1,137,597,388,22,Green,149,599,0,0,Yellow,292,599,0,0,Red,431,599,0,0

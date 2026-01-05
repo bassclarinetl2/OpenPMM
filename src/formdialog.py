@@ -58,27 +58,29 @@ class PageController:
 
 
 class FormItem(QObject):
-    def __init__(self,parent,pc:PageController,f,dw=0,dh=0):
+    def __init__(self,parent,form,f,dw=0,dh=0):
         super().__init__(parent)
-        self.parent = parent
-        self.page_controller = pc
+        self.form = form
         self.widget = QWidget(parent)
-        self.label = f[0]
+        self.id = f[0]
+        # f[1] is the type, which is implicit by the subclass
+        self.dependson = f[2]
         self.validity_indicator = None
-        self.dependson = ""
         self.page = 0
         # at least temporarily there is a "P" in front of the page number - ignore it if so
         f[3] = f[3].lstrip("P")
         self.page = int(f[3])-1 # 0-based 
-        if len(f[1]) and f[1] != "Y":
-            self.dependson = f[2]
+        #if f[2] and f[2] != "Y":
+        #    self.dependson = f[2]
         self.subjectlinesource = "Subject"
         self.group = -1 # gets set if part of a group
-        if len(f[2]) and f[4] != "0":
+        # radio buttons and check boxes are never individually shown in red, just the groups that they are in
+        # also, allg groups are never drawn, in that case the children are
+        if len(f[2]) and f[4] != "0" and not (f[1] == "rb:" or f[1] == "cb" or f[1] == "allg"):
             self.validity_indicator = QFrame(parent)
             # expand the coordinates a litle
             e = 4
-            x,y,w,h = self.page_controller.get_coordinates(self.page,f[4:8],dw,dh)
+            x,y,w,h = self.form.page_controller.get_coordinates(self.page,f[4:8],dw,dh)
             x -= e
             y -= e
             w += 2*e
@@ -88,19 +90,69 @@ class FormItem(QObject):
             self.validity_indicator.setFrameStyle(QFrame.Shape.Box|QFrame.Shadow.Plain)
             self.validity_indicator.hide()
 
-    def get_value(self): pass
+    def get_value(self): 
+        pass
 
     def is_valid(self):
-        return True
+        return bool(self.get_value())
+    
+    def is_required(self) -> bool:
+        if not self.dependson :
+            return False
+        # can be "always required"
+        if self.dependson == "Y":
+            return True
+        # or conditionally required
+        # can be a formula
+        n,o,v = FormItem.partition_name_op_value(self.dependson)
+        if o and v:
+            if o == "==":
+                return self.form.get_value_by_id(n) == v
+            elif o == "!=":
+                return self.form.get_value_by_id(n) != v
+        else:
+            if tmp := self.form.get_item_by_id(self.dependson):
+                return tmp.should_dependent_be_red()
+        
+    def should_be_red(self) -> bool:
+        # an item should be red if:
+        # if has a red outline
+        if self.validity_indicator:
+            # it is required (permanently or conditionally) but it is blank
+            if self.is_required() and not self.get_value():
+                return True
+            # it is not blank but it is invalid
+            if self.get_value() and not self.is_valid():
+                return True
+        return False        
 
+    # this returns True id an item depending on this item should turn red
+    def should_dependent_be_red(self):
+        return False
+
+    @staticmethod
+    def partition_name_op_value(s:str):
+        # the operator can only be "==" or "!=" (maybe allow "=")
+        n,o,v = s.partition("==")
+        if o and v:
+            return (n.strip(),o,v.strip())
+        n,o,v = s.partition("!=")
+        if o and v:
+            return (n.strip(),o,v.strip())
+        n,o,v = s.partition("=")
+        if o and v:
+            return (n.strip(),"==",v.strip())
+        return (n,"","")
+    
+   
 class FormItemString(FormItem):
     signalValidityCheck = Signal(FormItem)
-    def __init__(self,parent,pc:PageController,f):
+    def __init__(self,parent,form,f):
         dw = 0 # default sizees
         dh = 26
-        super().__init__(parent,pc,f,dw,dh)
+        super().__init__(parent,form,f,dw,dh)
         self.widget = QLineEdit("",parent) # or f[1]
-        x,y,w,h = self.page_controller.get_coordinates(self.page,f[4:8],dw,dh)
+        x,y,w,h = self.form.page_controller.get_coordinates(self.page,f[4:8],dw,dh)
         self.widget.setGeometry(x,y,w,h)
         font = QFont()
         #font =  self.cMailList.item(i,0).font()
@@ -114,7 +166,7 @@ class FormItemString(FormItem):
     def get_value(self):
         return self.widget.text()
 
-    def setValue(self,value):
+    def set_value(self,value):
         return self.widget.setText(value)
     
     def is_valid(self):
@@ -122,8 +174,8 @@ class FormItemString(FormItem):
         return len(s) > 0
 
 class FormItemDateString(FormItemString):
-    def __init__(self,parent,pc:PageController,f):
-        super().__init__(parent,pc,f)
+    def __init__(self,parent,form,f):
+        super().__init__(parent,form,f)
         self.widget.setPlaceholderText("mm/dd/yyyy")
 
     def is_valid(self):
@@ -135,8 +187,8 @@ class FormItemDateString(FormItemString):
             return False         
 
 class FormItemTimeString(FormItemString):
-    def __init__(self,parent,pc:PageController,f):
-        super().__init__(parent,pc,f)
+    def __init__(self,parent,form,f):
+        super().__init__(parent,form,f)
         self.widget.setPlaceholderText("hh:mm")
 
     def is_valid(self):
@@ -150,8 +202,8 @@ class FormItemTimeString(FormItemString):
             return False         
 
 class FormItemNumberString(FormItemString):
-    def __init__(self,parent,pc:PageController,f):
-        super().__init__(parent,pc,f)
+    def __init__(self,parent,form,f):
+        super().__init__(parent,form,f)
 
     def is_valid(self):
         s = self.get_value()
@@ -159,8 +211,8 @@ class FormItemNumberString(FormItemString):
         return s.isdigit()
 
 class FormItemPhoneString(FormItemString):
-    def __init__(self,parent,pc:PageController,f):
-        super().__init__(parent,pc,f)
+    def __init__(self,parent,form,f):
+        super().__init__(parent,form,f)
         if self.validity_indicator:
             self.widget.setPlaceholderText("###-###-####")
 
@@ -173,8 +225,8 @@ class FormItemPhoneString(FormItemString):
             return False
 
 class FormItemEmailString(FormItemString):
-    def __init__(self,parent,pc:PageController,f):
-        super().__init__(parent,pc,f)
+    def __init__(self,parent,form,f):
+        super().__init__(parent,form,f)
 
     def is_valid(self):
         s = self.get_value()
@@ -185,8 +237,8 @@ class FormItemEmailString(FormItemString):
             return False
 
 class FormItemZipString(FormItemString):
-    def __init__(self,parent,pc:PageController,f):
-        super().__init__(parent,pc,f)
+    def __init__(self,parent,form,f):
+        super().__init__(parent,form,f)
 
     def is_valid(self):
         s = self.get_value()
@@ -194,10 +246,10 @@ class FormItemZipString(FormItemString):
 
 class FormItemMultiString(FormItem):
     signalValidityCheck = Signal(FormItem)
-    def __init__(self,parent,pc:PageController,f):
-        super().__init__(parent,pc,f)
+    def __init__(self,parent,form,f):
+        super().__init__(parent,form,f)
         self.widget = QPlainTextEdit(parent)
-        x,y,w,h = self.page_controller.get_coordinates(self.page,f[4:8])
+        x,y,w,h = self.form.page_controller.get_coordinates(self.page,f[4:8])
         self.widget.setGeometry(x,y,w,h)
         self.widget.setPlainText("") # or f[1]
         font = QFont()
@@ -211,26 +263,23 @@ class FormItemMultiString(FormItem):
     def get_value(self):
         return self.widget.toPlainText().replace("]","`]").replace("\n","\\n")
 
-    def setValue(self,value):
+    def set_value(self,value):
         return self.widget.setPlainText(value.replace("`]","]").replace("\\n","\n"))
 
-    def is_valid(self):
-        s = self.get_value()
-        return len(s) > 0
 
 class FormItemRadioButtons(FormItem): # always multiple buttons
     signalValidityCheck = Signal(FormItem)
-    def __init__(self,parent,pc:PageController,f):
+    def __init__(self,parent,form,f):
         dw = 64 # default size
         dh = 14
-        super().__init__(parent,pc,f,dw,dh)
+        super().__init__(parent,form,f,dw,dh)
         nb = (len(f)-8)//5
         self.widget = QButtonGroup(parent)
         self.values = []
         for i in range (nb):
             j = i*5+8
             tmpwidget = QRadioButton("                ",parent)
-            x,y,w,h = self.page_controller.get_coordinates(self.page,f[j+1:j+5],dw,dh)
+            x,y,w,h = self.form.page_controller.get_coordinates(self.page,f[j+1:j+5],dw,dh)
             tmpwidget.setGeometry(x,y,w,h)
             self.widget.addButton(tmpwidget,i)
             palette = tmpwidget.palette()
@@ -245,27 +294,27 @@ class FormItemRadioButtons(FormItem): # always multiple buttons
             if b.isChecked():
                 return self.values[index]
         return ""
-#        index = self.widget.checkedId()
-#        if index < 0: return ""
-#        return self.values[index]
 
-    def setValue(self,value):
+    def set_value(self,value):
         for i, v in enumerate(self.values):
             if v == value:
                 self.widget.button(i).setChecked(True)
 
-    def is_valid(self):
-        return bool(self.get_value())
-    
+    def should_dependent_be_red(self):
+        tmp = self.get_value()
+        if tmp and tmp != "No":
+            return True
+        return False
+
 
 class FormItemCheckBox(FormItem):
     signalValidityCheck = Signal(FormItem)
-    def __init__(self,parent,pc:PageController,f):
+    def __init__(self,parent,form,f):
         dw = 64 # default size
         dh = 14
-        super().__init__(parent,pc,f,dw,dh)
+        super().__init__(parent,form,f,dw,dh)
         self.widget = QCheckBox("                ",parent) # or f[1]
-        x,y,w,h = self.page_controller.get_coordinates(self.page,f[4:8],dw,dh)
+        x,y,w,h = self.form.page_controller.get_coordinates(self.page,f[4:8],dw,dh)
         self.widget.setGeometry(x,y,w,h)
         palette = self.widget.palette()
         palette.setColor(QPalette.ColorRole.Text,QColor("blue"))
@@ -275,20 +324,18 @@ class FormItemCheckBox(FormItem):
     def get_value(self):
         return "checked" if self.widget.isChecked() else ""
 
-    def setValue(self,value):
+    def set_value(self,value):
         return self.widget.setChecked(value)
 
-    def is_valid(self):
-        return bool(self.get_value())
 
 class FormItemDropDown(FormItem):
     signalValidityCheck = Signal(FormItem)
-    def __init__(self,parent,pc:PageController,f):
+    def __init__(self,parent,form,f):
         dw = 0 # default size
         dh = 26
-        super().__init__(parent,pc,f)
+        super().__init__(parent,form,f)
         self.widget = QComboBox(parent) # or f[1]
-        x,y,w,h = self.page_controller.get_coordinates(self.page,f[4:8],dw,dh)
+        x,y,w,h = self.form.page_controller.get_coordinates(self.page,f[4:8],dw,dh)
         self.widget.setGeometry(x,y,w,h)
         n = len(f)-8
         for i in range(n):
@@ -303,35 +350,51 @@ class FormItemDropDown(FormItem):
     def get_value(self):
         return self.widget.currentText()
 
-    def setValue(self,value):
+    def set_value(self,value):
         return self.widget.setCurrentText(value)
 
-    def is_valid(self):
-        return bool(self.get_value())
 
-class FormItemRequiredGroup(FormItem):
+# this class returns valid if any child item is valid
+class FormItemAnyGroup(FormItem):
     signalValidityCheck = Signal(FormItem)
-    def __init__(self,parent,dialog,pc:PageController,f):
-        super().__init__(parent,pc,f)
-        self.dialog = dialog
-        nc = (len(f)-8)
+    def __init__(self,parent,form,f):
+        super().__init__(parent,form,f)
         self.children = []
-        for i in range (nc):
-            self.children.append(f[i+8])
-
-    def get_value(self):
-        for c in self.children:
-            v = self.dialog.get_value_by_id(c)
-            if v:
-                return True
-        return False
-
-    def setValue(self,value):
-        pass
 
     def is_valid(self):
-        return bool(self.get_value())
+        return not self.should_dependent_be_red()
+    
+    def should_be_red(self):
+        return self.should_dependent_be_red()
+    
+    def should_dependent_be_red(self):
+        for c in self.children:
+            v = self.form.get_value_by_id(c)
+            if v:
+                return False
+        return True
 
+
+# this class returns valid if all child items are valid (or none)
+class FormItemAllGroup(FormItem):
+    signalValidityCheck = Signal(FormItem)
+    def __init__(self,parent,form,f):
+        super().__init__(parent,form,f)
+        self.children = []
+
+    def should_be_red(self):
+        return False
+    
+    def should_dependent_be_red(self):
+        all = True
+        none = True
+        for c in self.children:
+            v = self.form.get_value_by_id(c)
+            if v:
+                none = False
+            else:
+                all = False
+        return not (all or none)
 
 class FormDialog(QMainWindow,Ui_FormDialogClass):
     def __init__(self,pd,form,formid,parent=None):
@@ -347,14 +410,15 @@ class FormDialog(QMainWindow,Ui_FormDialogClass):
         self.footers = []
         self.fields = [] # a list of FormItem objects
         self.fieldid = {}  # a dictionary that maps the field id to the index
-        #self.group = {}  # a dictionary that maps the field id to a container group, if there is one (rare)
         section = 0 # 1 = headers, 2 = footers, 3 = fields, 4 = dependencies
         try:
             with open(form,"rt") as file:
                 while l := file.readline():
-                    l = l.rstrip()
-                    if len(l) < 2: continue
-                    if l[0:2] == '//': continue
+                    if comment := l.find("//") >= 0:
+                        l = l[:comment]
+                    l = l.strip()
+                    if len(l) < 2: 
+                        continue
                     if l == "[Headers]":
                         oldsection = section
                         section = 1
@@ -403,29 +467,31 @@ class FormDialog(QMainWindow,Ui_FormDialogClass):
                                 f[0] = f[0][1:]
                                 self.subjectlinesource = f[0]
                             if f[1] == "str":
-                                self.fields.append(FormItemString(self.cForm,self.page_controller,f))
+                                self.fields.append(FormItemString(self.cForm,self,f))
                             elif f[1] == "dstr":
-                                self.fields.append(FormItemDateString(self.cForm,self.page_controller,f))
+                                self.fields.append(FormItemDateString(self.cForm,self,f))
                             elif f[1] == "tstr":
-                                self.fields.append(FormItemTimeString(self.cForm,self.page_controller,f))
+                                self.fields.append(FormItemTimeString(self.cForm,self,f))
                             elif f[1] == "nstr":
-                                self.fields.append(FormItemNumberString(self.cForm,self.page_controller,f))
+                                self.fields.append(FormItemNumberString(self.cForm,self,f))
                             elif f[1] == "pstr":
-                                self.fields.append(FormItemPhoneString(self.cForm,self.page_controller,f))
+                                self.fields.append(FormItemPhoneString(self.cForm,self,f))
                             elif f[1] == "estr":
-                                self.fields.append(FormItemEmailString(self.cForm,self.page_controller,f))
+                                self.fields.append(FormItemEmailString(self.cForm,self,f))
                             elif f[1] == "zstr":
-                                self.fields.append(FormItemZipString(self.cForm,self.page_controller,f))
+                                self.fields.append(FormItemZipString(self.cForm,self,f))
                             elif f[1] == "mstr":
-                                self.fields.append(FormItemMultiString(self.cForm,self.page_controller,f))
+                                self.fields.append(FormItemMultiString(self.cForm,self,f))
                             elif f[1] == "rb":
-                                self.fields.append(FormItemRadioButtons(self.cForm,self.page_controller,f))
+                                self.fields.append(FormItemRadioButtons(self.cForm,self,f))
                             elif f[1] == "cb":
-                                self.fields.append(FormItemCheckBox(self.cForm,self.page_controller,f))
+                                self.fields.append(FormItemCheckBox(self.cForm,self,f))
                             elif f[1] == "dd":
-                                self.fields.append(FormItemDropDown(self.cForm,self.page_controller,f))
-                            elif f[1] == "rg":
-                                self.fields.append(FormItemRequiredGroup(self.cForm,self,self.page_controller,f))
+                                self.fields.append(FormItemDropDown(self.cForm,self,f))
+                            elif f[1] == "anyg":
+                                self.fields.append(FormItemAnyGroup(self.cForm,self,f))
+                            elif f[1] == "allg":
+                                self.fields.append(FormItemAllGroup(self.cForm,self,f))
                             if len(self.fields) > index: #something was added, add to dictionaries
                                 if f[0]:
                                     self.fieldid[f[0]] = index
@@ -443,11 +509,13 @@ class FormDialog(QMainWindow,Ui_FormDialogClass):
 
         # set up any groups
         for index, f in enumerate(self.fields):
-            if isinstance(f,FormItemRequiredGroup):
-                for c in f.children:
-                    p = self.get_item_by_id(c)
-                    if p:
-                        p.group = index
+            if isinstance(f,FormItemAnyGroup) or isinstance(f,FormItemAllGroup):
+                f.group = index
+                for index2, f2 in enumerate(self.fields):
+                    if FormItem.partition_name_op_value(f2.dependson)[0] == f.id:
+                        f.children.append(f2.id)
+                        f2.group = index
+
         if self.pd: # formtool does not supply the persistent data object
             subject = self.pd.make_standard_subject() if self.pd else ""
             self.set_value_by_id("MsgNo",subject)
@@ -494,28 +562,32 @@ class FormDialog(QMainWindow,Ui_FormDialogClass):
         self.scrollArea.setWidget(self.cForm)
 
     # if any item gets changed, we get here
-    def updateSingle(self,f:FormItem):
-        if (f.validity_indicator):
-            v = f.is_valid()
-            if not v and f.dependson:
-                tmp = self.get_item_by_id(f.dependson)
-                if (tmp):
-                    tmpv = tmp.get_value()
-                    if tmpv == "No":
-                        tmpv = ""
-                    v = not tmpv
-            if v:
-                f.validity_indicator.hide()
-            else:
-                f.validity_indicator.show()
-        if f.group >= 0:
-            self.updateSingle(self.fields[f.group])
-        # even though this item is not required there might be something that depends on it
-        for field in self.fields:
-            if field.dependson == f.label:
-                self.updateSingle(field)
-        
+    # it gets called as the "on_change" handler for all of the controls,
+    # it gets called as part of updateAll, 
+    # and it gets called recursively
 
+    def updateSingle(self,f:FormItem):
+        # if a member of a group has changed, redo all members of the group
+        if f.group >= 0:
+            for field in self.fields:
+                if field.group == f.group:
+                    if field.validity_indicator:
+                        if field.should_be_red():
+                            field.validity_indicator.show()
+                        else:
+                            field.validity_indicator.hide()
+            return
+        if f.validity_indicator:
+            if f.should_be_red():
+                f.validity_indicator.show()
+            else:
+                f.validity_indicator.hide()
+        # even though this item is not required there might be something that depends on it and it needs to be redrawn
+        for field in self.fields:
+            if FormItem.partition_name_op_value(field.dependson)[0] == f.id:
+                self.updateSingle(field)
+
+    # this only gets called in __init__ and after pre-populating
     def updateAll(self):
         for f in self.fields:
             self.updateSingle(f)
@@ -553,11 +625,16 @@ class FormDialog(QMainWindow,Ui_FormDialogClass):
 
     def set_value_by_id(self,fname,value):
         if fname in self.fieldid:
-            self.fields[self.fieldid[fname]].setValue(value)
+            self.fields[self.fieldid[fname]].set_value(value)
 
     def get_value_by_id(self,fname):
         if fname in self.fieldid:
             return self.fields[self.fieldid[fname]].get_value()
+        return ""
+
+    def is_valid_by_id(self,fname):
+        if fname in self.fieldid:
+            return self.fields[self.fieldid[fname]].is_valid()
         return ""
 
     def onSend(self):
@@ -584,7 +661,7 @@ class FormDialog(QMainWindow,Ui_FormDialogClass):
                 if not isinstance(f,FormItemRequiredGroup):
                     v = f.get_value()
                     if v:
-                        message += f"{f.label}: [{v}]\n"
+                        message += f"{f.id}: [{v}]\n"
             for f in self.footers:
                 message += f + "\n"
             handling = self.get_value_by_id("5.")

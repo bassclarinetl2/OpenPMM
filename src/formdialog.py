@@ -130,6 +130,9 @@ class FormItem(QObject):
     def should_dependent_be_red(self):
         return False
 
+    def include_in_output(self):
+        return True
+    
     @staticmethod
     def partition_name_op_value(s:str):
         # the operator can only be "==" or "!=" (maybe allow "=")
@@ -306,7 +309,6 @@ class FormItemRadioButtons(FormItem): # always multiple buttons
             return True
         return False
 
-
 class FormItemCheckBox(FormItem):
     signalValidityCheck = Signal(FormItem)
     def __init__(self,parent,form,f):
@@ -374,6 +376,9 @@ class FormItemAnyGroup(FormItem):
                 return False
         return True
 
+    def include_in_output(self): # these exist only for bookkeeping purposes
+        return False
+    
 
 # this class returns valid if all child items are valid (or none)
 class FormItemAllGroup(FormItem):
@@ -396,6 +401,10 @@ class FormItemAllGroup(FormItem):
                 all = False
         return not (all or none)
 
+    def include_in_output(self): # these exist only for bookkeeping purposes
+        return False
+    
+
 class FormDialog(QMainWindow,Ui_FormDialogClass):
     def __init__(self,pd,form,formid,parent=None):
         super().__init__(parent)
@@ -411,6 +420,7 @@ class FormDialog(QMainWindow,Ui_FormDialogClass):
         self.fields = [] # a list of FormItem objects
         self.fieldid = {}  # a dictionary that maps the field id to the index
         section = 0 # 1 = headers, 2 = footers, 3 = fields, 4 = dependencies
+        oldsection = -1
         try:
             with open(form,"rt") as file:
                 while l := file.readline():
@@ -454,14 +464,22 @@ class FormDialog(QMainWindow,Ui_FormDialogClass):
                                 l0 = int(m.group(2))
                                 l1 = int(m.group(3))
                                 nl = (l1-l0)+1
+                                # someimes nl is -1, means the size of the image
+                                # I used to do this computation elsewhere, but the immutable-ness of tuples was messing me up
+                                if nl < 0:
+                                    nl = QPixmap(m.group(1)).height() - l1
                                 self.pages.append((m.group(1),l0,nl)) # specific lines
                         else:
-                            self.pages.append((l,0,1100)) # all lines
+                            nl = QPixmap(l).height()
+                            self.pages.append((l,0,nl)) # all lines
                     elif section == 4:
                         f = l.split(",")
                         # typical line: 12.,mstr,Y,page,52,105,100,20
                         # fields:       0   1    2 3    4  5   6   7 
                         if len(f) >= 8:
+                            # discard extaneous spaces
+                            for i in range(len(f)):
+                                f[i] = f[i].strip()
                             index = len(self.fields)
                             if f[0] and f[0][0] == '*':
                                 f[0] = f[0][1:]
@@ -504,7 +522,7 @@ class FormDialog(QMainWindow,Ui_FormDialogClass):
 
         # if there were no pages specified, use default
         if not self.pages:
-            self.pages.append((self.form.replace("*.desc",".png"),0,1100))
+            self.pages.append((self.form.replace("*.desc",".png"),0,-1))
         self.make_composite_picture()
 
         # set up any groups
@@ -544,17 +562,27 @@ class FormDialog(QMainWindow,Ui_FormDialogClass):
         return super().resizeEvent(event)
     
     def make_composite_picture(self):
+        # first figure out the scale
+        # all x/y/w/h values are in 100ths of an inch, which for 850x1100 images is the same as pixels
+        # if the images are any other size, force them to be 850 wide, which will cause a scaling of the items in the "Pages" section (those are always pixels)
+        scale = 1.0
+        # temporarily read first one
+        assert(self.pages)
+        tmp = QPixmap(self.pages[0][0])
+        w = tmp.width()
+        scale = 850/w
         h = 0
         # pages is a tuple (filename,startline,numlines)
         for page in self.pages:
-            h += page[2]
+            h += page[2]*scale
         pm = QPixmap(850,h) # all pages *should* be 850x1100
         painter = QPainter(pm)
-        h = 0
+        y = 0
         for page in self.pages:
             pm2 = QPixmap(page[0])
-            painter.drawPixmap(QPoint(0,h),pm2,QRect(0,page[1],850,page[2]))
-            h += page[2]
+            # painter.drawPixmap(QPoint(0,h),pm2,QRect(0,page[1],850,page[2]))
+            painter.drawPixmap(QRect(0,y,850,page[2]*scale),pm2,QRect(0,page[1],w,page[2]))
+            y += page[2]*scale
         painter.end()
         h = pm.height()
         w = pm.width()
@@ -638,7 +666,7 @@ class FormDialog(QMainWindow,Ui_FormDialogClass):
         return ""
 
     def onSend(self):
-        # checkincheckout is comepletely different than any other
+        # checkincheckout is completely different than any other
         if self.form == "CheckInCheckOut.desc":
             handling = "R"
             line1 = self.get_value_by_id("Type") + " "
@@ -658,7 +686,7 @@ class FormDialog(QMainWindow,Ui_FormDialogClass):
             for h in self.headers:
                 message += h + "\n"
             for f in self.fields:
-                if not isinstance(f,FormItemRequiredGroup):
+                if f.include_in_output():
                     v = f.get_value()
                     if v:
                         message += f"{f.id}: [{v}]\n"

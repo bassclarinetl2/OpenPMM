@@ -292,7 +292,7 @@ class Jnos2Parser(BbsParser):
         for mbh in self.messages_to_be_acknowledged:
             subject = f"DELIVERED: {mbh.subject}"
             b1 = f"!LMI!{mbh.local_id}!DR!{date} {time}\n"
-            b2 = f"Your Message\nTo: {mbh.from_addr}\n"
+            b2 = f"Your Message\nTo: {mbh.to_addr}\n"
             b3 = f"Subject: {mbh.subject}\n"
             b4 = f"was delivered on {date} {time}\r"
             b5 = f"Recipient's Local Message ID: {mbh.local_id}\r"

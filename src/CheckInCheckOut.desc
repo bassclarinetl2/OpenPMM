@@ -6,11 +6,11 @@
 CheckInCheckOut.png
 
 [Fields]
-MsgNo,str,Y,P1,169,25,151,20
-Type,rb,Y,P1,168,53,198,23,Check-In,174,57,0,0,Check-Out,273,57,0,0
-UserCall,str,Y,P1,169,82,92,20
-UserName,str,Y,P1,336,82,452,20
-UseTacticalCall,cb,,P1,20,114,0,0
-TacticalCall,str,,P1,169,111,92,19
-TacticalName,str,,P1,336,111,452,19
+MsgNo,str,Y,P1,180,27,160,21
+Type,rb,Y,P1,179,56,210,24,Check-In,185,61,0,0,Check-Out,290,61,0,0
+UserCall,str,Y,P1,180,87,98,21
+UserName,str,Y,P1,357,87,480,21
+UseTacticalCall,cb,,P1,21,121,0,0
+TacticalCall,str,,P1,180,118,98,20
+TacticalName,str,,P1,357,118,480,20
 

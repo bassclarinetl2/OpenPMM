@@ -19,6 +19,7 @@
 """
 from enum import Enum
 from operator import attrgetter
+import re
 import sys
 from urllib.parse import quote_plus,unquote_plus
 
@@ -392,7 +393,12 @@ class MainWindow(QMainWindow,Ui_MainWindowClass):
         # log this
         try:
             with open("activity.log","ab") as file:
-                s = f"s,{mbh.date_sent},{mbh.from_addr},{mbh.to_addr},{mbh.local_id},{quote_plus(mbh.subject)}\n"
+                fromid = mbh.subject.partition("_")[0] # parse off first part of subject
+                # does it look like an id?
+                if not re.match(r'^[A-Z0-9]{3}-\d+(R|P)$',fromid):
+                    fromid = ""
+#                s = f"s,{mbh.date_sent},{mbh.from_addr},{fromid},{mbh.to_addr},{mbh.local_id},{quote_plus(mbh.subject)}\n"
+                s = f"s,{mbh.date_sent},{mbh.from_addr},{fromid},{mbh.to_addr},,,{mbh.subject}\n"
                 file.write(s.encode("windows-1252","replace"))
         except FileNotFoundError:
             pass
@@ -409,8 +415,10 @@ class MainWindow(QMainWindow,Ui_MainWindowClass):
         # log only
         try:
             with open("activity.log","ab") as file:
-                s = f"s,{mbh.date_sent},{mbh.from_addr},{mbh.to_addr},{mbh.local_id},{quote_plus(mbh.subject)}\n"
-                file.write(s.encode("windows-1252","replace"))
+#                s = f"s,{mbh.date_sent},{mbh.from_addr},{mbh.to_addr},{mbh.local_id},{quote_plus("DELIVERED: "+mbh.subject)}\n"
+#                s = f"s,{mbh.date_sent},{mbh.from_addr},,{mbh.to_addr},,DELIVERED: {mbh.subject}\n" # confirmations do not appear to have IDs in either direction
+                # the to/from needs to be reversed since we are sending this
+                s = f"s,{mbh.date_sent},{mbh.to_addr},,{mbh.from_addr},,,DELIVERED: {mbh.subject}\n" # confirmations do not appear to have IDs in either direction                file.write(s.encode("windows-1252","replace"))
         except FileNotFoundError:
             pass
 
@@ -601,11 +609,18 @@ class MainWindow(QMainWindow,Ui_MainWindowClass):
         s,faddr,lmi = self.match_delivery_receipts(mbh,m)
         if s and lmi:
             self.mailbox.add_target_id(s,faddr,lmi)
+        else:
+            lmi = ""
         # log this
         try:
             with open("activity.log","ab") as file:
-                s = f"r,{mbh.date_received},{mbh.from_addr},{mbh.to_addr},{mbh.local_id},{quote_plus(mbh.subject)}\n"
-                file.write(s.encode("windows-1252"))
+#                s = f"r,{mbh.date_received},{mbh.from_addr},{mbh.to_addr},{mbh.local_id},{quote_plus(mbh.subject)}\n"
+                fromid = mbh.subject.partition("_")[0] # parse off first part of subject
+                # does it look like an id?
+                if not re.match(r'^[A-Z0-9]{3}-\d+(R|P)$',fromid):
+                    fromid = ""
+                s = f"r,{mbh.date_received},{mbh.from_addr},{fromid},{mbh.to_addr},{mbh.local_id},{lmi},{mbh.subject}\n"
+                file.write(s.encode("windows-1252","replace"))
         except FileNotFoundError:
             pass
         self.update_mail_list()

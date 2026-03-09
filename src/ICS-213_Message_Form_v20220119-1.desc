@@ -34,10 +34,10 @@ MsgNo,str,Y,P1,446,49,94,25
 6a.,rb,,P1,574,161,183,23,Yes,577,165,0,0,No,718,165,0,0
 6b.,rb,,P1,574,190,183,23,Yes,577,193,0,0,No,718,193,0,0
 6d.,str,6b.=Yes,P1,641,191,62,18
-7.,str,Y,P1,83,233,313,26
-8.,str,Y,P1,469,233,320,26
-9a.,str,Y,P1,83,282,313,27
-9b.,str,Y,P1,469,282,319,27
+7.,dd,Y,P1,83,233,313,26,Radio Operators
+8.,dd,Y,P1,469,233,320,26,Preparedness Specialist
+9a.,dd,Y,P1,83,282,313,27,Santa Clara County
+9b.,dd,Y,P1,469,282,319,27,Sunnyvale EOC
 ToName,str,,P1,83,332,313,25
 FmName,str,,P1,469,332,319,25
 ToTel,pstr,,P1,83,381,313,27

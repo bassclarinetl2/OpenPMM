@@ -13,3 +13,7 @@ venv/
 *$py.class
 *.zip
 *.cmd
+*.old
+*.new
+*.bak
+x.x

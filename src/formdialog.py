@@ -477,7 +477,7 @@ class FormDialog(QMainWindow,Ui_FormDialogClass):
                         # typical line: 12.,mstr,Y,page,52,105,100,20
                         # fields:       0   1    2 3    4  5   6   7 
                         if len(f) >= 8:
-                            # discard extaneous spaces
+                            # discard extraneous spaces
                             for i in range(len(f)):
                                 f[i] = f[i].strip()
                             index = len(self.fields)

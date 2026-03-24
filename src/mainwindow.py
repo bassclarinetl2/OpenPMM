@@ -35,16 +35,17 @@ import formdialog
 import generalsettingsdialog
 from globalsignals import global_signals
 import interfacedialog
+import monitordialog
 import messagesettingsdialog
 import newpacketmessage
 from persistentdata import PersistentData
 import readmessagedialog
 import searchdialog
-from serialstream import SerialStream
+from serialstream import SerialStream,LineDelimitedSerialStream,KissSerialStream
 import sendreceivesettingsdialog
 from sql_mailbox import MailBox, MailBoxHeader, MailFlags, FieldsToSearch
 import stationiddialog
-from tncparser import KantronicsKPC3Plus
+from tncparser import TAPR_Device, KISS_Device
 from ui_mainwindow import Ui_MainWindowClass
 
 
@@ -55,7 +56,7 @@ class MainWindow(QMainWindow,Ui_MainWindowClass):
         self.settings = PersistentData()
         self.serialport = QSerialPort()
         self.sdata = bytearray()
-        self.serialStream = SerialStream(self.serialport)
+        self.serialStream = None
         self.tnc_parser = None
         self.tempory_status_bar_message = ""
         # self.settings.clear()
@@ -106,21 +107,22 @@ class MainWindow(QMainWindow,Ui_MainWindowClass):
         self.cMailList.customContextMenuRequested.connect(self.on_mail_list_right_click)
         self.cMailList.horizontalHeader().sectionClicked.connect(self.on_sort_mail)
         self.actionSearch.triggered.connect(self.on_search)
-        self.actionSend_Receive.triggered.connect(lambda: self.on_send_receive(True,True,True))
-        self.actionSend_Receive_No_Bulletins.triggered.connect(lambda: self.on_send_receive(True,True,False))
-        self.actionSend_Only.triggered.connect(lambda: self.on_send_receive(True,False,False))
-        self.actionReceive_Only.triggered.connect(lambda: self.on_send_receive(False,True,False)) # not sure about the last False
+        self.actionSend_Receive.triggered.connect(lambda: self.on_send_receive(True,True))
+        self.actionSend_Receive_No_Bulletins.triggered.connect(lambda: self.on_send_receive(True,True))
+        self.actionSend_Only.triggered.connect(lambda: self.on_send_receive(True,False))
+        self.actionReceive_Only.triggered.connect(lambda: self.on_send_receive(False,True))
         self.actionReset_all_to_SCC_standard.triggered.connect(self.resetAllToSccStandard)
         self.actionAbout_OpenPMM.triggered.connect(self.on_about)
+        self.actionMonitor.triggered.connect(self.on_monitor)
         self.cNew.clicked.connect(self.on_new_message)
         #self.cOpen.clicked.connect(self.on_new_message)
         self.cArchive.clicked.connect(self.on_archive_messages)
         self.cDelete.clicked.connect(self.on_delete_messages)
         #self.cPrint.clicked.connect(self.on_delete_messages)
         self.cSearch.clicked.connect(self.on_search)
-        self.cSendReceive.clicked.connect(lambda: self.on_send_receive(True,True,True))
-        self.cSendOnly.clicked.connect(lambda: self.on_send_receive(True,False,False))
-        self.cReceiveOnly.clicked.connect(lambda: self.on_send_receive(False,True,False))
+        self.cSendReceive.clicked.connect(lambda: self.on_send_receive(True,True))
+        self.cSendOnly.clicked.connect(lambda: self.on_send_receive(True,False))
+        self.cReceiveOnly.clicked.connect(lambda: self.on_send_receive(False,True))
         self.actionImport.triggered.connect(self.on_import_messages)
         self.cInTray.clicked.connect(lambda: self.onSelectFolder(MailFlags.FOLDER_IN_TRAY))
         self.cOutTray.clicked.connect(lambda: self.onSelectFolder(MailFlags.FOLDER_OUT_TRAY))
@@ -372,6 +374,32 @@ class MainWindow(QMainWindow,Ui_MainWindowClass):
     def on_about(self):
         aboutdialog.AboutDialog(self).exec()
 
+    def on_monitor(self):
+        # if a cycle was in progress, cancel it
+        if self.tnc_parser:
+            self.on_end_send_receive()
+        port = self.settings.getInterface("ComPort")
+        if not port:
+            QMessageBox.critical(self,"Error",f"Error serial port has not been configuired, go to Setup/Interface")
+            return
+        # port = port.partition('/')[0].rstrip()
+
+        f = self.open_serial_port()
+        if not f:
+            QMessageBox.critical(self,"Error",f"Error {self.serialport.errorString()} opening serial port")
+            return
+        if self.settings.getInterface("Type") == "KISS":
+            self.serialStream = KissSerialStream(self.serialport)
+        else:
+            self.serialStream = LineDelimitedSerialStream(self.serialport)
+        self.tnc_parser = KISS_Device(self.settings,self) ###
+        #self.bbsParser = Nos2Parser(self.settings,self)
+
+        tmp = monitordialog.MonitorDialog(self.settings,self)
+        tmp.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        tmp.show()
+        tmp.raise_()
+
     def on_new_message(self):
         tmp = newpacketmessage.NewPacketMessage(self.settings,self)
         tmp.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
@@ -523,7 +551,7 @@ class MainWindow(QMainWindow,Ui_MainWindowClass):
             self.serialport.setRequestToSend(True)
         return True
     
-    def on_send_receive(self,send:bool,recv:bool,recv_bulletins:bool,sendimmediate:[int]=None):
+    def on_send_receive(self,send:bool,recv:bool,sendimmediate:[int]=None):
         # if a cycle was in progress, cancel it
         if self.tnc_parser:
             self.on_end_send_receive()
@@ -537,19 +565,25 @@ class MainWindow(QMainWindow,Ui_MainWindowClass):
         if not f:
             QMessageBox.critical(self,"Error",f"Error {self.serialport.errorString()} opening serial port")
             return
-        self.tnc_parser = KantronicsKPC3Plus(self.settings,self)
+        if self.settings.getInterface("Type") == "KISS":
+            self.serialStream = KissSerialStream(self.serialport)
+            self.tnc_parser = KISS_Device(self.settings,self)
+        else:
+            self.serialStream = LineDelimitedSerialStream(self.serialport)
+            self.tnc_parser = TAPR_Device(self.settings,self)
+
         #self.bbsParser = Nos2Parser(self.settings,self)
-        self.serialStream = SerialStream(self.serialport)
+
         global_signals.signal_new_incoming_message.connect(self.on_new_incoming_message)
         global_signals.signal_message_sent.connect(self.on_message_sent)
-        self.tnc_parser.signalDisconnected.connect(self.on_end_send_receive)
+        global_signals.signal_disconnected.connect(self.on_end_send_receive)
         self.tnc_parser.signal_status_bar_message.connect(self.on_status_bar_message)
         srflags = 0
         if send:
             srflags |= 1
         if recv:
             srflags |= 2
-        if recv_bulletins:
+        if recv and self.settings.getBBSBool("RetrieveBulletins"):
             srflags |= 4
         self.tnc_parser.start_session(self.serialStream,self.mailbox,srflags,sendimmediate)
 
@@ -558,12 +592,13 @@ class MainWindow(QMainWindow,Ui_MainWindowClass):
             return
         index = []
         index.append(self.mailIndex[row])
-        self.on_send_receive(True,False,False,index)
+        self.on_send_receive(True,False,index)
 
     def on_end_send_receive(self):
         #self.serialport.close()
         # this causes a loop # self.tnc_parser.end_session()
-        self.serialStream.reset()
+        if self.serialStream:
+            self.serialStream.reset()
         self.serialStream = None
         self.tnc_parser = None
 
@@ -889,6 +924,7 @@ class MainWindow(QMainWindow,Ui_MainWindowClass):
         self.settings.setActiveBBS(self.settings.getBBSs()[0])
 
         self.settings.addInterface("XSC_Kantronics_KPC3-Plus","KPC3+ TNC for use with Santa Clara County's BBS System. Verify the COM port setting for your system.")
+        self.settings.addInterface("Generic KISS Device","Verify the COM port setting for your system. Network interfacing is not yet supported.")
         self.settings.setActiveInterface(self.settings.getInterfaces()[0])
         for p in KantronicsKPC3Plus.get_default_prompts():
             self.settings.setInterface(p[0],p[1])
@@ -904,7 +940,7 @@ class MainWindow(QMainWindow,Ui_MainWindowClass):
         self.settings.setInterface("DataBits","8")
         self.settings.setInterface("StopBits","1")
         self.settings.setInterface("FlowControl","RTS/DTS")
-        self.settings.addInterface("XSC_Kantronics_KPC3","KPC3 (NOT the 3+ version) TNC for use with Santa Clara County's BBS System. Verify the COM port setting for your system.")
+        # self.settings.addInterface("XSC_Kantronics_KPC3","KPC3 (NOT the 3+ version) TNC for use with Santa Clara County's BBS System. Verify the COM port setting for your system.")
         # more interfaces go here
         self.settings.addUserCallSign(callsign,name,prefix)
         # ?? is this needed? self.settings.setActiveProfile("Main") # the default profile

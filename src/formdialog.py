@@ -11,8 +11,12 @@ from globalsignals import global_signals
 from ui_formdialog import Ui_FormDialogClass
 
 class PageController:
-    def __init__(self,pages):
-        self.pages = pages
+    def __init__(self,pages,scale):
+        self.pages = []
+        self.scale = scale
+        for pn,s,e in pages:
+            self.pages.append((pn,int(s*scale),int(e*scale)))
+        pass
 
     def get_coordinates(self,page:int,f:list,dw=0,dh=0):
         x = int(f[0])
@@ -42,6 +46,8 @@ class PageController:
 
     def page_to_screen(self,pageindex,line) -> int: # returns -1 if not on any page
         line_offset = 0
+        if pageindex == 2:
+            pageindex += 0
         if 0 <= pageindex < len(self.pages):
             for p,page in enumerate(self.pages):
                 if p == pageindex:
@@ -273,6 +279,8 @@ class FormItemMultiString(FormItem):
 class FormItemRadioButtons(FormItem): # always multiple buttons
     signalValidityCheck = Signal(FormItem)
     def __init__(self,parent,form,f):
+        # radio buttons (and checkboxes) use the coordinates of their center instead of the upper left
+        # width and height are always shown as "0"
         dw = 64 # default size
         dh = 14
         super().__init__(parent,form,f,dw,dh)
@@ -282,8 +290,8 @@ class FormItemRadioButtons(FormItem): # always multiple buttons
         for i in range (nb):
             j = i*5+8
             tmpwidget = QRadioButton("                ",parent)
-            x,y,w,h = self.form.page_controller.get_coordinates(self.page,f[j+1:j+5],dw,dh)
-            tmpwidget.setGeometry(x,y,w,h)
+            x,y,_,_ = self.form.page_controller.get_coordinates(self.page,f[j+1:j+5],0,0)
+            tmpwidget.setGeometry(x-7,y-dh/2,dw,dh) # the "7" is related to how QRadioButtons get rendered
             self.widget.addButton(tmpwidget,i)
             palette = tmpwidget.palette()
             palette.setColor(QPalette.ColorRole.Text,QColor("blue"))
@@ -312,12 +320,14 @@ class FormItemRadioButtons(FormItem): # always multiple buttons
 class FormItemCheckBox(FormItem):
     signalValidityCheck = Signal(FormItem)
     def __init__(self,parent,form,f):
+        # radio buttons (and checkboxes) use the coordinates of their center instead of the upper left
+        # width and height are always shown as "0"
         dw = 64 # default size
         dh = 14
         super().__init__(parent,form,f,dw,dh)
         self.widget = QCheckBox("                ",parent) # or f[1]
-        x,y,w,h = self.form.page_controller.get_coordinates(self.page,f[4:8],dw,dh)
-        self.widget.setGeometry(x,y,w,h)
+        x,y,_,_ = self.form.page_controller.get_coordinates(self.page,f[4:8],0,0)
+        self.widget.setGeometry(x-7,y-dh/2,dw,dh) # the "7" is related to how QCheckBoxs get rendered (left-justified)
         palette = self.widget.palette()
         palette.setColor(QPalette.ColorRole.Text,QColor("blue"))
         self.widget.setPalette(palette)
@@ -419,6 +429,7 @@ class FormDialog(QMainWindow,Ui_FormDialogClass):
         self.footers = []
         self.fields = [] # a list of FormItem objects
         self.fieldid = {}  # a dictionary that maps the field id to the index
+        self.scale = 1.0
         section = 0 # 1 = headers, 2 = footers, 3 = fields, 4 = dependencies
         oldsection = -1
         try:
@@ -450,7 +461,9 @@ class FormDialog(QMainWindow,Ui_FormDialogClass):
                         section = 5
                         continue
                     if oldsection == 3 and section != 3: # we have finished the pages section
-                        self.page_controller = PageController(self.pages)
+                        self.compute_scale_and_fix_pages() # this needs to happen before the controls are placed
+                        self.page_controller = PageController(self.pages,self.scale)
+                        oldsection = -1
                     if section == 1:
                         self.headers.append(l)
                     elif section == 2:
@@ -561,28 +574,37 @@ class FormDialog(QMainWindow,Ui_FormDialogClass):
         self.scrollArea.resize(event.size().width()-24,event.size().height()-56)
         return super().resizeEvent(event)
     
-    def make_composite_picture(self):
-        # first figure out the scale
+    def compute_scale_and_fix_pages(self):
         # all x/y/w/h values are in 100ths of an inch, which for 850x1100 images is the same as pixels
         # if the images are any other size, force them to be 850 wide, which will cause a scaling of the items in the "Pages" section (those are always pixels)
-        scale = 1.0
+        self.scale = 1.0
         # temporarily read first one
         assert(self.pages)
         tmp = QPixmap(self.pages[0][0])
         w = tmp.width()
+        self.scale = 850/w
+
+
+    def make_composite_picture(self):
+        # all x/y/w/h values are in 100ths of an inch, which for 850x1100 images is the same as pixels
+        # if the images are any other size, force them to be 850 wide, which will cause a scaling of the items in the "Pages" section (those are always pixels)
+        assert(self.pages)
+        tmp = QPixmap(self.pages[0][0])
+        w = tmp.width()
         scale = 850/w
+
         h = 0
         # pages is a tuple (filename,startline,numlines)
         for page in self.pages:
-            h += page[2]*scale
+            h += page[2]*self.scale
         pm = QPixmap(850,h) # all pages *should* be 850x1100
         painter = QPainter(pm)
         y = 0
         for page in self.pages:
             pm2 = QPixmap(page[0])
             # painter.drawPixmap(QPoint(0,h),pm2,QRect(0,page[1],850,page[2]))
-            painter.drawPixmap(QRect(0,y,850,page[2]*scale),pm2,QRect(0,page[1],w,page[2]))
-            y += page[2]*scale
+            painter.drawPixmap(QRect(0,y,850,page[2]*self.scale),pm2,QRect(0,page[1],w,page[2]))
+            y += page[2]*self.scale
         painter.end()
         h = pm.height()
         w = pm.width()

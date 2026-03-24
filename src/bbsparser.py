@@ -1,7 +1,10 @@
 # pylint:  disable="line-too-long,missing-function-docstring,multiple-statements,no-name-in-module"
 
+from collections import deque
 import datetime
+
 from PySide6.QtCore import QObject, Signal
+
 from sql_mailbox import MailBox, MailBoxHeader, MailFlags
 from globalsignals import global_signals
 
@@ -26,7 +29,7 @@ class BbsSequenceStep():
         # arbitrary data item that can be passed to the handler (after the reply value)
         self.data = data
 
-class BbsSequenceStepNoResonse(): # I think only "BYE" uses this
+class BbsSequenceStepNoResponse(): # I think only "BYE" uses this
     def __init__(self,s):
         self.what_to_send = s
 
@@ -38,7 +41,7 @@ class BbsSequenceSync():
         self.data = data
 
 # at any given time, "bbs_sequence" is a mix of BbsSequenceSteps, but the first entry will always be a BbsSequenceSync
-# once a BbsSequenceStep gets to the front, it's contents will be send and then the BbsSequenceStep object will be moved to the bbs_pending list
+# once a BbsSequenceStep gets to the front, it's contents will be sent and then the BbsSequenceStep object will be moved to the bbs_pending list
 # note that all BbsSequence items except BbsSequenceSync are asyncronous - they immediately return, often before the messsage has been sent to
 # the serial port
 class BbsParser(QObject):
@@ -49,25 +52,26 @@ class BbsParser(QObject):
     def __init__(self,pd,using_echo,parent=None):
         super().__init__(parent)
         self.pd = pd
-        self.bbs_sequence = [] # a list of BbsSequenceSteps (and similar)
-        self.bbs_pending = [] # a list of BbsSequenceSteps that are awaiting a response
+        self.bbs_sequence = deque() # a list of BbsSequenceSteps (and similar)
+        self.bbs_pending = deque() # a list of BbsSequenceSteps that are awaiting a response
         self.messages_to_be_killed = []
         self.messages_to_be_acknowledged = []
-        self.serial_stream = None # later will be set to a SerialStream
+        self.tnc_device = None # later will be set to a TncDevice
         self.using_echo = using_echo
         self.srflags = 0
         self.sendimmediate = []
 
-    def start_session(self,ss,mailbox,srflags:int,sendimmediate:[int]=None):
-        self.serial_stream = ss
+    def start_session(self,tnc,mailbox,srflags:int,sendimmediate:[int]=None):
+        self.tnc_device = tnc
         self. mailbox = mailbox
         self.srflags = srflags
         self.sendimmediate = sendimmediate
-        self.serial_stream.line_end = b") >\r\n" # this matches what the original outpost uses, does now wotk if TNC is set for long prompts ("Z >\r\n" would be work)
-        self.serial_stream.include_line_end_in_reply = True
-        self.serial_stream.signalLineRead.disconnect()
-        self.serial_stream.signalLineRead.connect(self.on_response)
-        self.serial_stream.signalDisconnected.connect(self.on_disconnected)
+        self.bbs_sequence.clear()
+        self.bbs_pending.clear
+        self.tnc_device.set_line_end(b") >\r\n") # this matches what the original Outpost uses, does not work if TNC is set for long prompts ("Z >\r\n" would be work)
+        self.tnc_device.set_include_line_end_in_reply(True)
+        global_signals.signal_line_read.connect(self.on_response)
+        global_signals.signal_disconnected.connect(self.on_disconnected)
         self.signal_status_bar_message.emit("Initializing the BBS")
 
     def end_session(self):
@@ -84,7 +88,7 @@ class BbsParser(QObject):
         for s in self.bbs_sequence:
             if isinstance(s,BbsSequenceStep):
                 print(f"  step: wts={s.what_to_send.replace("\r","|")} h={s.handler} d={s.data}")
-            elif isinstance(s,BbsSequenceStepNoResonse):
+            elif isinstance(s,BbsSequenceStepNoResponse):
                 print(f"  stnr: wts={s.what_to_send.replace("\r","|")}")
             elif isinstance(s,BbsSequenceSync):
                 print(f"  sync: h={s.handler} d={s.data}")
@@ -95,42 +99,42 @@ class BbsParser(QObject):
                 print(f"  step: wts={s.what_to_send.replace("\r","|")} h={s.handler} d={s.data}")
         print()
 
-    def add_step(self,step): # argument is a BbsSequenceStep, a BbsSequenceStepNoResonse, or a BbsSequenceSync
-        # self.dump_sequence("as-before:")
-        assert(isinstance(step,(BbsSequenceStep,BbsSequenceStepNoResonse,BbsSequenceSync)))
+    def add_step(self,step): # argument is a BbsSequenceStep, a BbsSequenceStepNoResponse, or a BbsSequenceSync
+        #self.dump_sequence("as-before:")
+        assert(isinstance(step,(BbsSequenceStep,BbsSequenceStepNoResponse,BbsSequenceSync)))
         self.bbs_sequence.append(step) # just add it to the end
-        # self.dump_sequence("as-after:")
+        #self.dump_sequence("as-after:")
         # now check the front (which might be the thing we just pushed)
         self.check_sequence()
 
     # adds to the front of the list, this happens when new steps are needed in response to commands, eg when we get a "la", when then insert the read commands
-    def push_step(self,step): # argument is a BbsSequenceStep, a BbsSequenceStepNoResonse, or a BbsSequenceSync
-        # self.dump_sequence("ps-before:")
-        assert(isinstance(step,(BbsSequenceStep,BbsSequenceStepNoResonse,BbsSequenceSync)))
+    def push_step(self,step): # argument is a BbsSequenceStep, a BbsSequenceStepNoResponse, or a BbsSequenceSync
+        #self.dump_sequence("ps-before:")
+        assert(isinstance(step,(BbsSequenceStep,BbsSequenceStepNoResponse,BbsSequenceSync)))
         self.bbs_sequence.insert(0,step)
-        # self.dump_sequence("ps-after:")
+        #self.dump_sequence("ps-after:")
         # now check the front (which might be the thing we just pushed)
         self.check_sequence()
 
     # call this when items have been add or removed or when bbs_pending has been changed
     def check_sequence(self):
-        # self.dump_sequence("cs-before:")
+        #self.dump_sequence("cs-before:")
         while self.bbs_sequence:
             step = self.bbs_sequence[0]
             if isinstance(step,BbsSequenceStep):
-                del self.bbs_sequence[0:1]
+                self.bbs_sequence.popleft()
                 self.bbs_pending.append(step)
                 if step.what_to_send:
-                    self.serial_stream.write(step.what_to_send)
-            elif isinstance(step,BbsSequenceStepNoResonse):
-                del self.bbs_sequence[0:1]
+                    self.tnc_device.send(step.what_to_send)
+            elif isinstance(step,BbsSequenceStepNoResponse):
+                self.bbs_sequence.popleft()
                 if step.what_to_send:
-                    self.serial_stream.write(step.what_to_send)
+                    self.tnc_device.send(step.what_to_send)
             elif isinstance(step,BbsSequenceSync):
                 if self.bbs_pending:
-                    # self.dump_sequence("cs-after:")
+                    #self.dump_sequence("cs-after:")
                     return # will get stuck here until all pendings are handled
-                del self.bbs_sequence[0:1]
+                self.bbs_sequence.popleft()
                 if step.handler: # I think this will always be true
                     step.handler(step.data)
 
@@ -144,8 +148,8 @@ class Jnos2Parser(BbsParser):
         self.home_area = self.pd.getActiveCallSign(False).upper()
         self.current_area = ""
         self.areas_to_read = []
-    def start_session(self,ss,mailbox,srflags,sendimmediate):
-        super().start_session(ss,mailbox,srflags,sendimmediate)
+    def start_session(self,tnc,mailbox,srflags,sendimmediate):
+        super().start_session(tnc,mailbox,srflags,sendimmediate)
         self.add_step(BbsSequenceStep("",self.start_session2)) # there is a prompt/terminator that will arrive without being told
 
     def start_session2(self,r,_=None):
@@ -168,6 +172,9 @@ class Jnos2Parser(BbsParser):
                 self.add_step(BbsSequenceStep("la\r",self.handle_list))
                 self.add_step(BbsSequenceSync())
                 self.add_step(BbsSequenceStep("a XSCEVENT\r"))
+                self.add_step(BbsSequenceStep("la\r",self.handle_list))
+                self.add_step(BbsSequenceSync())
+                self.add_step(BbsSequenceStep("a ALLXSC\r"))
                 self.add_step(BbsSequenceStep("la\r",self.handle_list))
                 self.add_step(BbsSequenceSync())
                 # not until L> works  ("ALLXSC")
@@ -206,7 +213,7 @@ class Jnos2Parser(BbsParser):
             return # nothing expected
         # this is probably/hopefully the response to the front element
         query = self.bbs_pending[0].what_to_send
-        # todo: code here used to match reply to query but not it appears to be gone
+        # todo: code here used to match reply to query but now it appears to be gone
         # should match up to first \n
         qbase = query.partition("\r")[0]
         print(f"bbs: <<{query.replace("\r","|").replace("\n","|")}>> returned <<{r.replace("\r","|").replace("\n","|")}>>")
@@ -216,14 +223,14 @@ class Jnos2Parser(BbsParser):
                 print("Matches")
             else:
                 print("Doesn't match")
-        step = self.bbs_pending.pop(0)
+        step = self.bbs_pending.popleft()
         if step.handler:
             step.handler(r,step.data)
         self.check_sequence()
 
     def handle_list(self,r,_=None):
         # if we get here, it means that all of the outgoing messages have been sent
-        print(f"got list {r}")
+        print(f"got list {r.replace("\r","|")}")
         # sample "la\r\nMail area: kw6w\r\n1 message  -  1 new\r\n\St.  #  TO            FROM     DATE   SIZE SUBJECT\r\n> N   1 kw6w@w1xsc.sc pkttue   Oct 15  747 DELIVERED: W6W-303P_P_ICS213_Shutti\r\nArea: kw6w Current msg# 1.\r\n" +terminator
         # or "la\r\nMail area: xscperm\r\n4 messages  -  4 new\r\nSt.  #  TO            FROM     DATE   SIZE SUBJECT\r\n> N   1 xscperm       xsceoc   Nov 27 5962 SCCo XSC Tactical Calls v191127    \r\n  N   2 xscperm       xsceoc   Sep  5 1932 SCCo Packet Frequencies v200905    \r\n  N   3 xscperm       xsceoc   Aug 13 2768 SCCo Packet Subject Line v220803   \r\n  N   4 xscperm       xsceoc   Aug  9 4326 SCCo Packet Tactical Calls v2024080\r\nArea: xscperm Current msg# 1.\r\n?,A,B,C,CONV,D,E,F,H,I,IH,IP,J,K,L,M,N,NR,O,P,PI,R,S,T,U,V,W,X,Z " >>
         lines = r.splitlines()
@@ -322,10 +329,10 @@ class Jnos2Parser(BbsParser):
         if " as " in callsign:
             self.add_step(BbsSequenceStep(f"# this is {callsign}\r"))
             self.add_step(BbsSequenceSync())
-        self.add_step(BbsSequenceStepNoResonse(self.get_command("CommandBye")+"\r")) # this will trigger the *** disconnect message
+        self.add_step(BbsSequenceStepNoResponse(self.get_command("CommandBye")+"\r")) # this will trigger the *** disconnect message
 
     def handle_read(self,r,data):
-        print(f"got read {r}")
+        print(f"got read {r.replace("\r","|")}")
         firstchar = "r" if self.using_echo else "M"
         in_home_area = self.current_area == self.home_area
         if r.startswith(firstchar) and in_home_area:

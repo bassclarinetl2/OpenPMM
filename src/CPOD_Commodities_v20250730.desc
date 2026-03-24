@@ -15,7 +15,7 @@ CPOD_Commodities_v20250730.png
 MsgNo,str,,P1,315,86,155,22
 1a.,dstr,Y,P1,94,158,70,26
 1b.,tstr,Y,P1,233,158,60,26
-5.,rb,Y,P1,408,157,375,28,IMMEDIATE,414,163,0,0,PRIORITY,552,163,0,0,ROUTINE,668,163,0,0
+5.,rb,Y,P1,408,157,375,28,IMMEDIATE,421,170,0,0,PRIORITY,559,170,0,0,ROUTINE,675,170,0,0
 7a.,dd,Y,P1,176,192,239,25,CPOD Unit,Mass Care & Emerg. Asst. Branch,Operations
 8a.,str,Y,P1,532,192,250,20
 7b.,str,Y,P1,157,217,258,20
@@ -28,7 +28,7 @@ MsgNo,str,,P1,315,86,155,22
 21d.,dstr,Y,P1,166,349,70,18
 21t.,tstr,Y,P1,536,349,60,18
 *30.,str,Y,P1,129,399,653,18
-31,rb,Y,P1,197,423,531,38,Activated,208,424,0,0,Pending Activation,208,446,0,0,Pending Demobilization,408,424,0,0,Demobilization,408,446,0,0,Not Activated,608,424,0,0
+31,rb,Y,P1,197,423,531,38,Activated,215,431,0,0,Pending Activation,215,453,0,0,Pending Demobilization,415,431,0,0,Demobilization,415,453,0,0,Not Activated,615,431,0,0
 70.,allg,,P1,268,507,504,43
 70a.,str,70.,P1,268,507,504,18
 70b.,nstr,70.,P1,252,532,70,18

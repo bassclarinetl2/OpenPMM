@@ -1,5 +1,6 @@
-from PySide6.QtCore import QObject, Signal
 from sql_mailbox import MailBoxHeader
+
+from PySide6.QtCore import QObject, Signal
 
 class GlobalSignals(QObject):
     signal_new_incoming_message = Signal(MailBoxHeader,str)
@@ -12,6 +13,9 @@ class GlobalSignals(QObject):
     signal_connected = Signal()
     signal_timeout = Signal()
     signal_disconnected = Signal()
+    signal_monitor_msg_plain = Signal(bytes)
+    signal_monitor_msg_ax25 = Signal(bytes)
+    signal_line_read = Signal(str)
 
 global_signals = GlobalSignals()
 

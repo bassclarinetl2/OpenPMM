@@ -6,21 +6,24 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>818</width>
-    <height>986</height>
+    <width>825</width>
+    <height>730</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>MonitorDialog</string>
   </property>
-  <widget class="QPlainTextEdit" name="cText">
+  <widget class="QPlainTextEdit" name="c_text">
    <property name="geometry">
     <rect>
-     <x>0</x>
+     <x>5</x>
      <y>5</y>
      <width>816</width>
-     <height>981</height>
+     <height>720</height>
     </rect>
+   </property>
+   <property name="lineWrapMode">
+    <enum>QPlainTextEdit::LineWrapMode::NoWrap</enum>
    </property>
    <property name="readOnly">
     <bool>true</bool>

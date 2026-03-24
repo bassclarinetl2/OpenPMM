@@ -22,13 +22,14 @@ class Ui_MonitorDialogClass(object):
     def setupUi(self, MonitorDialogClass):
         if not MonitorDialogClass.objectName():
             MonitorDialogClass.setObjectName(u"MonitorDialogClass")
-        MonitorDialogClass.resize(818, 986)
-        self.cText = QPlainTextEdit(MonitorDialogClass)
-        self.cText.setObjectName(u"cText")
-        self.cText.setGeometry(QRect(0, 5, 816, 981))
-        self.cText.setReadOnly(True)
-        self.cText.setPlainText(u"")
-        self.cText.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
+        MonitorDialogClass.resize(825, 730)
+        self.c_text = QPlainTextEdit(MonitorDialogClass)
+        self.c_text.setObjectName(u"c_text")
+        self.c_text.setGeometry(QRect(5, 5, 816, 720))
+        self.c_text.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
+        self.c_text.setReadOnly(True)
+        self.c_text.setPlainText(u"")
+        self.c_text.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
 
         self.retranslateUi(MonitorDialogClass)
     # setupUi

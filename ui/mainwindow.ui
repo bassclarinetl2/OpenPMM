@@ -564,14 +564,6 @@
      <addaction name="actionScripting_Tool"/>
      <addaction name="actionPick_and_Run_a_Script"/>
     </widget>
-    <widget class="QMenu" name="menuInteractive_Packet">
-     <property name="title">
-      <string>Interactive Packet</string>
-     </property>
-     <addaction name="actionSerial_Com_Port"/>
-     <addaction name="actionAGW_Packet_Engine"/>
-     <addaction name="actionTelnet"/>
-    </widget>
     <addaction name="actionSend_Receive_Settings"/>
     <addaction name="actionMessage_Settings"/>
     <addaction name="actionReport_Settings"/>
@@ -588,7 +580,7 @@
     <addaction name="actionPack_Column_Widths"/>
     <addaction name="actionReset_Form_to_Normal"/>
     <addaction name="separator"/>
-    <addaction name="menuInteractive_Packet"/>
+    <addaction name="actionMonitor"/>
    </widget>
    <widget class="QMenu" name="menuForms">
     <property name="title">
@@ -1000,6 +992,11 @@
   <action name="actionICS_309_Communications_Log">
    <property name="text">
     <string>ICS-309 Communications Log</string>
+   </property>
+  </action>
+  <action name="actionMonitor">
+   <property name="text">
+    <string>Monitor...</string>
    </property>
   </action>
  </widget>

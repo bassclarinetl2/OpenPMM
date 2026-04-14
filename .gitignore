@@ -11,6 +11,9 @@ dist/
 venv/
 *.py[codz]
 *$py.class
-ui_*.py
 *.zip
 *.cmd
+*.old
+*.new
+*.bak
+x.x

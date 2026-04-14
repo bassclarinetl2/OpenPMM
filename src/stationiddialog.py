@@ -100,6 +100,6 @@ class StationIdDialog(QDialog,Ui_StationIdDialog):
             self.loadTacticalCallSigns()
             self.cTacticalCallSign.setCurrentText(text)
             self.cTacticalMessageIdPrefix.setText(prefix)
-            if self.cTacticalCallSign.count() == 0:
-                self.pd.setActiveTacticalCallSign(text)
+            #if self.cTacticalCallSign.count() == 0:
+            self.pd.setActiveTacticalCallSign(text)
 

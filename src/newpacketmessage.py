@@ -24,6 +24,14 @@ class NewPacketMessage(QMainWindow,Ui_NewPacketMessageClass):
         subject = self.pd.make_standard_subject()
         self.cSubject.setText(subject)
 
+    def prepopulate(self,mbh:MailBoxHeader,m:str):
+        self.cBBS.setText(mbh.bbs)
+        self.cFrom.setText(mbh.from_addr)
+        self.cTo.setText(mbh.to_addr)
+        self.cSubject.setText(mbh.subject)
+        self.cMessage.setPlainText(m)
+        self.cUrgent.setChecked(mbh.flags & MailFlags.IS_URGENT.value)
+
     def resizeEvent(self,event):
         self.cMessage.resize(event.size().width()-20,event.size().height()-50)
         return super().resizeEvent(event)
@@ -68,8 +76,11 @@ class NewPacketMessage(QMainWindow,Ui_NewPacketMessageClass):
         elif self.cMessageTypeNts.isChecked(): mbh.set_type(2)
         mbh.from_addr = self.cFrom.text()
         mbh.to_addr = self.cTo.text()
+        # if they used some non-standard separator, fix that
+        mbh.to_addr = mbh.to_addr.replace(";",",")
         mbh.bbs = self.cBBS.text()
         #mbh.local_id = ""
+        #mbh.target_id = ""
         mbh.subject = self.cSubject.text()
         mbh.date_sent = MailBoxHeader.normalized_date()
         #mbh.date_received = "" # in ISO-8601 format
